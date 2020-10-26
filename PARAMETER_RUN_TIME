@@ -1,0 +1,70 @@
+''' Run time as a funcion of parameter'''
+
+
+
+import numpy as np
+
+
+# try overlapping gaussian peaks, but will need supercomputer
+
+
+# 1 parameter - the amplitude
+
+run_time1 = [1.6247360000002118,2.975513999999748, 1.6714469999997164, 1.6384760000000824, 1.8265980000001036, 1.4517630000000281 ]
+average1 = np.mean(run_time1)
+standard_error1 = np.std(run_time1)/np.sqrt(6)
+print(average1, standard_error1)
+
+# 2 parameters - amplitude and central 
+
+run_time2 = [ 7.226857000000109, 3.6059210000003077, 3.2238800000000083, 2.5585289999999077, 2.347635000000082, 2.4290169999999307 ]
+average2 = np.mean(run_time2)
+standard_error2 = np.std(run_time2)/np.sqrt(6)
+print(average2, standard_error2)
+
+# 3 parameters
+run_time3 = [19.021945999999843, 35.033977999999934, 36.550076999999874, 39.566975000000184,24.48482699999977, 31.885314000000108 ]
+average3 = np.mean(run_time3)
+standard_error3 = np.std(run_time3)/np.sqrt(6)
+print(average3, standard_error3)
+
+# 4 parameters
+
+run_time4 = [30.22377200000028, 36.15452699999969, 34.619063999999526, 34.07116099999985, 39.092977000000246, 41.27336800000012, 39.47943899999973]
+average4 = np.mean(run_time4)
+standard_error4 = np.std(run_time4)/np.sqrt(6)
+print(average4, standard_error4)
+
+#5parameters
+run_time5 = [40.07440399999996, 48.057926999999836,43.236495000000104, 52.967601000000286, 56.95154000000002, 60.540995000000294  ]
+average5 = np.mean(run_time5)
+standard_error5 = np.std(run_time5)/np.sqrt(6)
+print(average5, standard_error5)
+
+# 6parameters
+run_time6 = [118.95623299999988, 129.6098919999995, 138.46436900000026, 123.44049199999972, 148.56731200000013, 126.98474999999962]
+average6 = np.mean(run_time6)
+standard_error6 = np.std(run_time6)/np.sqrt(6)
+print(average6, standard_error6)
+
+#7 parameters
+run_time7 = [126.68032000000039, 150.09270300000026, 135.25770400000056, 123.5740450000003, 159.70496100000037, 149.61505000000034 ]
+average7 = np.mean(run_time7)
+standard_error7 = np.std(run_time7)/np.sqrt(6)
+print(average7, standard_error7)
+
+
+
+run_time8 = [122.95409600000039, 159.0272589999995, 124.79695999999967, 174.42072599999938, 159.08373700000084, 154.99085099999957 ]
+average8 = np.mean(run_time8)
+standard_error8 = np.std(run_time8)/np.sqrt(6)
+print(average8, standard_error8)
+# for three parameters double gaussian:
+
+
+#for 9 parameters
+run_time9 = [172.55551400000002, 168.560776, 175.99370699999986, 178.3259519999997, 184.26749700000028,166.61405399999998  ]
+average9 = np.mean(run_time9)
+standard_error9 = np.std(run_time9)/np.sqrt(6)
+print(average9, standard_error9)
+
