@@ -1,0 +1,27 @@
+"""
+Created on Thu Dec  3 17:06:39 2020
+
+@author: madugadzama
+"""
+
+'''Week 9 contouring. This is simply used to create contour plots from the data collected from the use of the GP'''
+
+
+#500 runs, variance_of_noise = 2.2
+backgorund = np.arange(-2,7.00000001,1)
+peak_height= np.arange(3, 12.00000001,1)
+
+x = np.arange(3, 12.00000001,1) # peak height 
+y = np.arange(-2,7.00000001,1)#background
+xx, yy = np.meshgrid(x,y, sparse=True)
+a = np.loadtxt('week_9_collection_chi_squared_background_peak_height1.txt') # make sure it is this txt file
+print(len(x),len(y))
+
+
+a = (np.reshape(a,(len(y),len(x))))
+print(x,y,a)
+plt.contour(x,y,a)
+plt.xlabel('Peak Height')
+plt.ylabel('Background')
+plt.title('Contour Plot for background and Peak Height', pad=20)
+
