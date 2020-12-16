@@ -1,0 +1,18 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Dec  3 16:10:00 2020
+
+@author: madugadzama
+"""
+
+'''Collection ofbackground with peak centre. This simply creates the txt files that the data made in the MLOOP file will deposit into'''
+
+import numpy as np 
+cost_array = np.array([])
+centre_array = np.array([])
+width_array = np.array([])
+
+np.savetxt('week_9_collection_chi_squared_background_peak_height3.txt', cost_array, fmt='%1.8f')
+np.savetxt('week_9_collection_chi_squared_background_peak_height_1_centre_value_3.txt', cost_array, fmt='%1.8f')
+np.savetxt('week_9_collection_chi_squared_background_peak_height_1_peak_width_value_3.txt', cost_array, fmt='%1.8f')
