@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Dec 15 16:53:39 2020
+
+@author: madugadzama
+"""
+
+'''let's rebuild the experiment'''
+
+import numpy as np 
+import matplotlib.pyplot as plt
+
+
+'''We have built this Lorentzian experiment so that the s_bgd and s_0
+are modelled as rates and x_0 and d_x are modelled as being fixed parameters. We can imagine putting 
+our apparatus in such a way that we look at one specific scattering angle. We then look for 
+example for one second and collect 10 values for s_bgd and s_0. We use these to find the 
+corresponding values of the linewidth and then find the mean linewidth and its corresponding error. 
+We loop across a range of angles doing exactly the same thing in order to build up the lorentzian graph. 
+We can now begin to play around with the time. We can increase the time. We have been using a random
+poisson distribution function from numpy where we specify the mean but then get given a value which 
+corresponds to the poisson distribution with this mean. By increasing the time, the mean will
+be closer and closer to what is fed into the poisson function. We are finding counts by doing 
+rate x time. Naturally, a the time increases and we collect more data, the SNR decreases. 
+This is a true experiment, with no contrived aspects. '''
+
+
+
+
+
+angle = np.arange(0,100,1) #first just test for angle of zero
+time=100
+s_bgd_rate = 2
+s_0_rate = 8
+x_0 = 50 # centre of peak
+d_x = 10 # angular width of peak
+
+#define the Lorentzian Linewidth
+def linewidth(x, s_bgd, s_0, x_0, d_x):
+    return s_bgd + s_0/(1+4*((x-x_0)/d_x)**2)
+
+
+
+
+lorentzian_values_for_all_angles = [] # this contains the mean lorentzian values for each angle. 
+lorentzian_values_for_all_angles_error = []#this contains the error for  lorentzian value at each angle.
+
+for j in range(len(angle)):
+
+    s_bgd = np.random.poisson(s_bgd_rate*time,10)
+    s_0 = np.random.poisson(s_0_rate*time,10)
+
+    mean_s_bgd = np.average(s_bgd)
+    mean_s_0 = np.average(s_0)
+
+    lorentzian= [] # contains the mean values for a single angle 
+    
+    for i in range(len(s_bgd)): 
+        lorentzian.append(linewidth(angle[j],s_bgd[i],s_0[i],x_0,d_x ))
+    
+    lorentzian = np.array(lorentzian) #turn into array for manipulation numerically
+    lorentzian_values_for_all_angles.append(sum(lorentzian)/len(lorentzian)) 
+    lorentzian_values_for_all_angles_error.append( np.std(lorentzian)/np.sqrt(len(lorentzian)))
+
+
+
+#print('mean s_bgd=', mean_s_bgd, 'mean_s_0', mean_s_0, '\n','\n', 'mean of lorentzian=', mean_lorentzian ,
+      #'\n', 'standard error of lorentzian=' , standard_error_lorentzian )
+      
+lorentzian_values_for_all_angles = np.array(lorentzian_values_for_all_angles)  
+lorentzian_values_for_all_angles_error = np.array(lorentzian_values_for_all_angles_error )
+
+plot=plt.errorbar(angle,lorentzian_values_for_all_angles,yerr=lorentzian_values_for_all_angles_error, marker = 'x', linestyle = 'None', color = 'red', label= str(time)+' ' + "seconds")  #this is how we get around the issue of combining string and integer
+plt.xlabel('Scattering Angle')
+plt.ylabel('Lorentzian')
+plt.legend(handles=[plot])
+plt.show()     
