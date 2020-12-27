@@ -1,0 +1,266 @@
+"""
+Created on Tue Dec 22 12:49:44 2020
+
+@author: madugadzama
+"""
+
+
+
+#Imports for python 2 compatibility
+from __future__ import absolute_import, division, print_function
+__metaclass__ = type
+
+#Imports for M-LOOP
+import mloop.interfaces as mli
+import mloop.controllers as mlc
+import mloop.visualizations as mlv
+import matplotlib.pyplot as plt
+#Other imports
+import numpy as np
+import time
+import random
+
+import pandas as pd
+
+
+'''Here, we shall upgrade to the Poisson Experiment. This will be a true experiment, where 
+ we do not know the vaue of the parameters. All we can do is change the time. This represents
+the true experiment. I have no idea what the actual values are.  '''
+
+#We have used random numbers for this experiment. We have still set it so that it roughly resembles what
+#you'd get in an investigation. 
+
+
+random.seed(16) # We have seeded to ensure the parameters are set
+angle = np.arange(0,100,1) #first just test for angle of zero
+time= [0.1,0.5,10,100] #Have updated to turn this into a array to allow plotting of 4 times at once
+s_bgd_rate =10*random.random()  #background count
+s_0_rate =20*random.random() #peak height 
+x_0 = 80*random.random()# centre of peak
+d_x = 70*random.random() # angular width of peak
+
+
+print(s_bgd_rate,s_0_rate,x_0 ,d_x )
+
+#define the Lorentzian Linewidth
+def linewidth(x, s_bgd, s_0, x_0, d_x):
+    return s_bgd + s_0/(1+4*((x-x_0)/d_x)**2)
+
+
+
+# here we shall have a list of lists where each element is the values for a plot at a particular time
+average_for_times = []
+error_for_times = []
+
+np.random.seed(5) # we seed for the poisson, outside of the loop 
+for m in range(len(time)):
+    
+
+
+    lorentzian_values_for_all_angles = [] # this contains the mean lorentzian values for each angle. 
+    lorentzian_values_for_all_angles_error = []#this contains the error for  lorentzian value at each angle.
+    
+    
+    average_for_times.append(lorentzian_values_for_all_angles)
+    error_for_times.append(lorentzian_values_for_all_angles_error)
+    
+    for j in range(len(angle)):
+
+        #np.random.seed(5)
+        s_bgd = np.random.poisson(s_bgd_rate*time[m],6) #we are just runs the experiment 5 times for each angle
+        s_0 = np.random.poisson(s_0_rate*time[m],6)
+
+        mean_s_bgd = np.average(s_bgd)
+        mean_s_0 = np.average(s_0)
+
+        lorentzian= [] # contains the mean values for a single angle 
+    
+        for i in range(len(s_bgd)): 
+            lorentzian.append(linewidth(angle[j],s_bgd[i],s_0[i],x_0,d_x ))
+    
+        lorentzian = np.array(lorentzian) #turn into array for manipulation numerically
+        lorentzian_values_for_all_angles.append(sum(lorentzian)/len(lorentzian)) 
+        lorentzian_values_for_all_angles_error.append( np.std(lorentzian)/np.sqrt(len(lorentzian)))
+        
+        
+        
+    lorentzian_values_for_all_angles = np.array(lorentzian_values_for_all_angles)  
+    lorentzian_values_for_all_angles_error = np.array(lorentzian_values_for_all_angles_error )
+
+     
+
+
+mean = np.array(average_for_times)
+standard_error = np.array(error_for_times)
+index_step = 0
+
+
+
+
+
+
+
+
+
+#defining our cost function to minimise
+def chi_squared(x, s_bgd, s_0, x_0, d_x):
+    return np.sum((mean[0] -linewidth(x, s_bgd, s_0, x_0, d_x))**2/standard_error**2)
+
+
+
+
+#print(len(mean), len(angle), len(standard_error),len(linewidth(angle,2,3,4,4)))
+
+#guessed_params=[]
+
+
+#Declare your custom class that inherets from the Interface class
+class CustomInterface(mli.Interface):
+    
+    #Initialization of the interface, including this method is optional
+    def __init__(self):
+        #You must include the super command to call the parent class, Interface, constructor 
+        super(CustomInterface,self).__init__()
+        
+        #Attributes of the interface can be added here
+        #If you want to precalculate any variables etc. this is the place to do it
+        #In this example we will just define the location of the minimum
+        
+        
+    #You must include the get_next_cost_dict method in your class
+    #this method is called whenever M-LOOP wants to run an experiment
+    def get_next_cost_dict(self,params_dict):
+        
+        #Get parameters from the provided dictionary
+        params = params_dict['params']
+        
+        #Here you can include the code to run your experiment given a particular set of parameters
+        #In this example we will just evaluate a sum of sinc functions
+        cost = (chi_squared(angle, params[0], params[1], params[2], params[3]))
+        #There is no uncertainty in our result
+        uncer = 0
+        #The evaluation will always be a success
+        bad = False
+        
+        
+        #The cost, uncertainty and bad boolean must all be returned as a dictionary
+        #You can include other variables you want to record as well if you want
+        cost_dict = {'cost':cost, 'uncer':uncer, 'bad':bad}
+        return cost_dict
+    
+def main():
+    #M-LOOP can be run with three commands
+    
+    #First create your interface
+    interface = CustomInterface()
+    #Next create the controller. Provide it with your interface and any options you want to set
+    controller = mlc.create_controller(interface, 
+                                       max_num_runs = 1000,
+                                       target_cost = 0,
+                                       num_params = 4, 
+                                       min_boundary = [0,0,20,0],  # We need some vague guess for the boundaries. These are guided by the plot
+                                       max_boundary = [14000,14000, 50,200])
+    #To run M-LOOP and find the optimal parameters just use the controller method optimize
+    controller.optimize()
+    
+    #The results of the optimization will be saved to files and can also be accessed as attributes of the controller.
+    print('Best parameters found:')
+    print(controller.best_params)
+    print(type(controller.best_params))
+    
+    
+    
+    saved_parameters = np.append(np.loadtxt('first_poisson_test_1'), controller.best_params)
+    np.savetxt('first_poisson_test_1', saved_parameters )
+    
+    saved_cost = np.append(np.loadtxt('chi_squared_poisson_test_1'), controller.best_cost)
+    np.savetxt('chi_squared_poisson_test_1', saved_cost )
+    
+    
+    for k in range(len(average_for_times)):
+        plot_guess, = plt.plot(angle, linewidth(angle, controller.best_params[0],controller.best_params[1] , controller.best_params[2], controller.best_params[3]), color='red', label='MLOOP Guess')
+        plot=plt.errorbar(angle,average_for_times[k],yerr=error_for_times[k], marker = '.', linestyle = 'None', color = 'blue', label= 'Collected Data for'+ ' ' + str(time[k])+' ' + "Seconds")  #this is how we get around the issue of combining string and integer)
+        plt.xlabel('Scattering Angle')
+        plt.ylabel('Lorentzian')
+        plt.legend(handles=[plot,plot_guess], loc=1, prop={'size': 10})
+        plt.savefig('Desktop/MACHINE LEARNING IN LASER PHYSICS EXPERIMENTS/WEEKLY REPORTS/WINTER_HOLIDAY_REPORT/'+str(time[k])+'_secs_guess_second_plot.eps', format='eps')
+        plt.show()
+    
+    
+    
+    
+    #for i in range(len(controller.best_params-1)):
+        #guessed_params.append(controller.best_params[i])
+        #plt.plot(angle, linewidth(angle,guessed_params[0], guessed_params[1],guessed_params[2],guessed_params[3]), color='red') # MLOOP guess
+    
+        
+    #plt.plot(angle, mean[0], color='blue')
+    #You can also run the default sets of visualizations for the controller with one command
+    
+    mlv.show_all_default_visualizations(controller)
+    
+#for i in range(len(average_for_times)-1):
+    #Ensures main is run when this code is run as a script
+    #index_step+=1
+    
+#if __name__ == '__main__':
+#    main()
+    
+
+'''This is the plotting method if you just want to plot one of the graphs'''
+
+
+#plt.plot(angle, mean[0], color='blue') # collected data 
+
+
+
+for k in range(len(average_for_times)):
+    #plot_guess, = plt.plot(angle, linewidth(angle,  np.loadtxt('4_plot_parameters_1')[0][0] ,np.loadtxt('4_plot_parameters_1')[0][1]   ,np.loadtxt('4_plot_parameters_1')[0][2],np.loadtxt('4_plot_parameters_1')[0][3]), color='red', label='MLOOP Guess')
+    plot=plt.errorbar(angle,average_for_times[k],yerr=error_for_times[k], marker = '.', linestyle = 'None', color = 'blue', label= 'Collected Data for'+ ' ' + str(time[k])+' ' + "Seconds")  #this is how we get around the issue of combining string and integer)
+    plt.xlabel('Scattering Angle')
+    plt.ylabel('Lorentzian')
+    plt.legend(handles=[plot], loc=1, prop={'size': 10})
+    #plt.savefig('Desktop/MACHINE LEARNING IN LASER PHYSICS EXPERIMENTS/WEEKLY REPORTS/WINTER_HOLIDAY_REPORT/10_secs_guess_first_plot.eps', format='eps')
+    plt.show()
+
+
+
+'''Single plot with no LOOPs. This is just done to plot our guessed rates from the 0.1s experiment 
+onto the 100s experiement.'''
+
+#plot_guess, = plt.plot(angle, linewidth(angle,  np.loadtxt('4_plot_parameters_1')[0][0]/0.1 *100 ,np.loadtxt('4_plot_parameters_1')[0][1]/0.1*100   ,np.loadtxt('4_plot_parameters_1')[0][2],np.loadtxt('4_plot_parameters_1')[0][3]), color='red', label='Extended MLOOP Guess')
+#plot=plt.errorbar(angle,average_for_times[3],yerr=error_for_times[3], marker = '.', linestyle = 'None', color = 'blue', label= 'Collected Data for'+ ' ' + str(time[k])+' ' + "Seconds")  #this is how we get around the issue of combining string and integer)
+#plt.xlabel('Scattering Angle',labelpad=0.1, fontsize=10)
+#plt.ylabel('Lorentzian', labelpad=0.1, fontsize=10)
+#plt.legend(handles=[plot,plot_guess], loc=1, prop={'size': 10})
+#plt.savefig('Desktop/MACHINE LEARNING IN LASER PHYSICS EXPERIMENTS/WEEKLY REPORTS/WINTER_HOLIDAY_REPORT/0.1_params_extended_to_100_1.eps', format='eps')
+#plt.show()
+
+
+
+#chi Squared values (used to check Chi squared values are the same each time):
+    
+#chi = chi_squared(angle, 3965.8193939 ,  8889.28105456, 33.3991061, 30.14938254 )
+#print(chi)
+
+
+
+
+'''Here, we plot 4 out of the size results for times of 0.1,0.5,10,100 to get a 4 graph plot
+the array np.loadtxt('4_plot_parameters_1') has the parameters for these 4 parameters saved in it. '''
+
+#fig = plt.figure()
+#fig.subplots_adjust(hspace=0.2, wspace=0.5)
+
+
+#letter = ['a','b','c','d']
+
+#for i in range(0,4):
+    #ax = fig.add_subplot(2, 2, i+1)
+    #plot_guess, = ax.plot(angle, linewidth(angle,np.loadtxt('4_plot_parameters_1')[i][0],np.loadtxt('4_plot_parameters_1')[i][1],np.loadtxt('4_plot_parameters_1')[i][2],np.loadtxt('4_plot_parameters_1')[i][3]), color='red', label='MLOOP Guess')
+    #plot= ax.errorbar(angle,average_for_times[i],yerr=error_for_times[i], marker = '.', linestyle = 'None', color = 'green', label= str(letter[i])+ ')     ' + str(time[i])+' ' + "seconds") 
+    #plt.xlabel('Scattering Angle',labelpad=0.1, fontsize=10)
+    #plt.ylabel('Lorentzian', labelpad=0.1, fontsize=10)
+    #plt.legend(handles=[plot, plot_guess], loc=1, prop={'size': 6})
+
+#plt.savefig('Desktop/MACHINE LEARNING IN LASER PHYSICS EXPERIMENTS/WEEKLY REPORTS/WINTER_HOLIDAY_REPORT/4_graph_mloop_guess_plot.eps', format='eps')
