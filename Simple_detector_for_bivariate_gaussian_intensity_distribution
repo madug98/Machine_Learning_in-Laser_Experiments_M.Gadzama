@@ -1,0 +1,148 @@
+"""
+Created on Thu Feb  4 13:33:08 2021
+
+@author: madugadzama
+"""
+
+''' Photon Counter Experiment. This allows you to define the grid for the photon 
+counter, and this will find the sum of the intensity curve in that region, 
+given mu_x and mu_y. The task that will be passed to M-LOOP is that of 
+moving the values of mu_x and mu_y such that the intensity in this region is maximised. 
+This can be tested at different SNR values. Note, the amplitude and standard deviations are 
+already set by the light. M-LOOP changes the mean values which simply moves the 
+curve around. This is a non-meshgrid approach, which is okay, because I can 
+specify the actual detector to be a rectangle.'''
+
+
+import random 
+import numpy as np 
+import matplotlib.pyplot as plt
+from mpl_toolkits import mplot3d
+
+
+from matplotlib import cm
+from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.patches as patches
+from matplotlib.patches import Rectangle
+random.seed(5) # Seed used to set the random variables
+
+time= [50] #Can move through the times in this aray. They are the times of measurements of the Gaussian
+
+#Here, we set the axe for the bivariate curve
+size_x =201
+size_y =201
+x = np.linspace(-100,100, size_x) # It covers a region from -100 to 100 in both x and y 
+y =  np.linspace(-100,100, size_y)
+
+
+#Here we set the amplitude and standard deviations of the curve
+A = (2*(10**4))*random.random()
+sigma_x = 60*random.random()
+sigma_y = 60*random.random()
+
+
+#Here we set the boundaries for the detection grid. This essentially shows the region the counter covers.
+grid_x_min = -25
+grid_x_max = 25
+grid_y_min = -10
+grid_y_max = 10
+
+
+#In this have set mu_x and mu_y, although in the real thing, M-LOOP will vary this. 
+mu_x =0.1
+mu_y=0.1
+
+
+def two_dimensional_gaussian(x,y, A,sigma_x,sigma_y,mu_x,mu_y):
+    return (A*(1/(2*np.pi*sigma_x*sigma_y) * np.exp(-((x-mu_x)**2/(sigma_x**2)
+     + (y-mu_y)**2/(sigma_y**2)))))
+
+
+''' The intensity counter''' # This takes the mu_x and mu_y defined by m-loop and finds the peak intensity
+def intensity_counts(mu_x, mu_y ): # this is a function which finds the total intensity in a given grid region
+    
+    average_counter_times = ([])
+    error_counter_times = ([])
+    np.random.seed(10) # we seed for the poisson, outside of the loop 
+    
+    for m in range(len(time)):
+        expected_intensity_values_counter = []
+        expected_intensity_errors_counter= []
+    
+        for l in range(len(x)):
+            for n in range(len(y)):
+                intensity_rate_counter = two_dimensional_gaussian(x[l],y[n], A,sigma_x,sigma_y,mu_x,mu_y)
+                intensity_counter = np.random.poisson(intensity_rate_counter*time[m],6)
+            
+                expected_intensity_values_counter.append(np.average(intensity_counter))
+                expected_intensity_errors_counter.append(np.std(intensity_counter)/np.sqrt(len(intensity_counter)))
+            
+        expected_intensity_values_counter = np.reshape(np.array(expected_intensity_values_counter),(len(x),len(y)))
+        expected_intensity_errors_counter = np.reshape(np.array(expected_intensity_errors_counter),(len(x),len(y)))
+    
+
+        average_counter_times.append(expected_intensity_values_counter) 
+        error_counter_times.append(expected_intensity_errors_counter)      
+        print('The peak SNR value at'+' ' + str(time[m])+'s '+ 'is:', np.sqrt(expected_intensity_values_counter.max()))   
+
+    average_counter_times = np.array( average_counter_times)
+    print('the total intensity measurement is:')
+    return np.sum(average_counter_times[0][int(x.max())+grid_x_min:int(x.max())+grid_x_max+1, int(y.max())+grid_y_min:int(y.max())+grid_y_max+1]) 
+    
+
+'''The surface plotter''' # This just takes the mu_x and mu_y found by M-LOOP and will plot the curves
+def surface_plotter( mu_x,mu_y):
+    average_counter_times = ([])
+    error_counter_times = ([])
+    np.random.seed(10) # we seed for the poisson, outside of the loop 
+    
+    for m in range(len(time)):
+        expected_intensity_values_counter = []
+        expected_intensity_errors_counter= []
+    
+        for l in range(len(x)):
+            for n in range(len(y)):
+                intensity_rate_counter = two_dimensional_gaussian(x[l],y[n], A,sigma_x,sigma_y,mu_x,mu_y)
+                intensity_counter = np.random.poisson(intensity_rate_counter*time[m],6)
+            
+                expected_intensity_values_counter.append(np.average(intensity_counter))
+                expected_intensity_errors_counter.append(np.std(intensity_counter)/np.sqrt(len(intensity_counter)))
+            
+        expected_intensity_values_counter = np.reshape(np.array(expected_intensity_values_counter),(len(x),len(y)))
+        expected_intensity_errors_counter = np.reshape(np.array(expected_intensity_errors_counter),(len(x),len(y)))
+    
+
+        average_counter_times.append(expected_intensity_values_counter) 
+        error_counter_times.append(expected_intensity_errors_counter)      
+          
+
+    average_counter_times = np.array( average_counter_times)
+    
+    x_plot,y_plot = np.meshgrid(x,y)
+    
+    for k in range(len( average_counter_times)):
+        plt.figure(figsize=(8,4))
+    
+        ax = plt.axes(projection='3d')
+    
+        plot = ax.plot_surface(x_plot, y_plot,  average_counter_times[k], rstride=1, cstride=1,
+                               cmap='Blues', edgecolor='none', label= 'Collected Data for'+ ' ' + str(time[k])+' ' + "Seconds")
+    
+    
+        ax.set_xlabel('x', fontsize = 15)
+        ax.set_ylabel('y', fontsize=15)
+        ax.set_zlabel('I',labelpad=0.1, fontsize=15);
+        #plt.savefig( 'Desktop/MACHINE LEARNING IN LASER PHYSICS EXPERIMENTS/TERM 2 weekly reports/WEEK 2/'+'rectangular_2_d_gaussian_time='+str(time[k])+'.png',dpi=1200)
+   
+        figure_contour = plt.figure(figsize=(8,4))
+        contour = plt.contourf(x_plot, y_plot,  average_counter_times[k], cmap='Blues')
+        plt.colorbar()
+        plt.ylabel('y', fontsize=15)
+        plt.xlabel('x', fontsize = 15)
+        
+        #plt.savefig('Desktop/MACHINE LEARNING IN LASER PHYSICS EXPERIMENTS/TERM 2 weekly reports/WEEK 2/'+'bivariate_point_at_which_centre_not_visible_1_time='+str(time[k])+'.png',dpi=1200)
+    
+
+
+surface_plotter(mu_x,mu_y)
+print(intensity_counts(mu_x, mu_y  ))
