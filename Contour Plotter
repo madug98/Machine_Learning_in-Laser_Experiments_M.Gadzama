@@ -4,7 +4,7 @@ Created on Thu Dec  3 17:06:39 2020
 @author: madugadzama
 """
 
-'''Week 9 contouring. This is simply used to create contour plots from the data collected from the use of the GP'''
+'''Week 9 contouring. This is simply used to create contour plots from the data collected from the use of the GP. Part of an investigation into covariances and the correlations between parameters.' '''
 
 
 #500 runs, variance_of_noise = 2.2
