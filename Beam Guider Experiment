@@ -1,0 +1,520 @@
+"""
+Created on Mon Mar  8 20:59:21 2021
+
+@author: madugadzama
+"""
+
+
+#Imports for M-LOOP
+import mloop.interfaces as mli
+import mloop.controllers as mlc
+import mloop.visualizations as mlv
+import matplotlib.pyplot as plt
+#Other imports
+import numpy as np
+import random
+import pandas as pd
+import time as timer # this is done as we have a variable called time
+from mpl_toolkits import mplot3d
+from matplotlib import cm
+from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.patches as patches
+from matplotlib.patches import Rectangle
+
+
+''' Beam guider experiment. This code starts off with an original distribution of photons, which are collected
+over a period of time, which can be specified (underneath). This allows for varying signal-to-noise
+ratios (SNR) to be tested. The distribtion is then fed through two guiders, one of which controls
+movement left and right, the other of which controls movement up and down. The distribution then
+lands on a detector (specified simply as a rectangular grid of variable dimensions). This is 
+interfaced with M-LOOP, with algorithms being used to optimise the 'intensity' (number of counts) that 
+end up landing on the detector. The aim for this experiment would be to combine it with
+the final form of experimentation (walking the beam) which was completed as part of the 
+masters project. '''
+
+
+
+
+number_of_runs_online = 10
+online_algor = 'gp'
+M_LOOP_algorithm_for_use = 'gaussian_process'
+
+
+
+time = [0.1]   #Here you can input time    
+
+detector_x = -60  #Here we specify the position of the centre of the detector
+detector_y =55    
+detector2_x = 60  #Here we specify the position of the centre of the detector
+detector2_y =-80 
+
+guider_plot_index = 'nm_highest_SNR_' #for graph saving
+
+
+
+#########################EXPERIMENT##########
+
+class online_experiment:
+    
+        
+    def __init__(self):  # Here we define all the conditions of the experiment. 
+        random.seed(5)
+        self.size_x =241
+        self.size_y =241
+        self.x = np.linspace(-120,120, self.size_x) # It covers a region from -140 to 140 in both x and y 
+        self.y =  np.linspace(-120,120, self.size_y)  # both were 100 originally
+
+
+        #Here we set the amplitude, standard deviations and the peak centre values for the experimental data. 
+        self.A = (9*(10**4))*random.random() # The rate A 
+        self.sigma_x = 30*random.random()# standard deviation in the x
+        self.sigma_y = 10*random.random()# standard deviation in the y 
+        
+        
+        #the shape of the detector
+        self.detector_length_x3 = 10 #This is the detector, which returns the total intensity collected at the end
+        self.detector_length_y3 = 10
+        
+        self.x_min3 = -(self.detector_length_x3)/2  #half the width and length
+        self.x_max3 = (self.detector_length_x3)/2
+        self.y_min3 = -(self.detector_length_y3)/2
+        self.y_max3 = (self.detector_length_y3)/2
+        
+        #the shape of the other detector
+        self.detector_length_x4 = 10 #This is the detector, which returns the total intensity collected at the end
+        self.detector_length_y4 = 10
+        
+        self.x_min4 = -(self.detector_length_x4)/2  #half the width and length
+        self.x_max4 = (self.detector_length_x4)/2
+        self.y_min4 = -(self.detector_length_y4)/2
+        self.y_max4 = (self.detector_length_y4)/2
+        
+        
+        self.mu_x = 45 # this is the input for the beam ie: it's centre is on mu_x and mu_y.
+        self.mu_y = -20
+        
+        self.mu_x_after_first = 0 # this is the values of mu_x and mu_y after you have passed through the first guider - it is zero to begin with it: before distribution passes through, it is the same as the input mu_x and mu_y
+        self.mu_y_after_first = 0
+        
+        self.mu_x_after_second = 0 # this is the values of mu_x and mu_y after you have passed through the second guider
+        self.mu_y_after_second = 0
+        
+        
+    def two_dimensional_gaussian(self,x,y,A,sigma_x,sigma_y,mu_x,mu_y):    #bivariate gaussian, used as the rate in the poisson equation
+        return (A*(1/(2*np.pi*sigma_x*sigma_y) * np.exp(-((x-mu_x)**2/(sigma_x**2)
+                                                          + (y-mu_y)**2/(sigma_y**2)))))
+        
+        
+    def intensity_values(self, mu_x, mu_y): #This function creates the original distribution. Only requires mux and muy
+        
+        x= self.x
+        y = self.y
+        average_counter_times = ([])
+        error_counter_times = ([])
+        detector_count =  ([])
+        np.random.seed(10)
+            
+        for m in range(len(time)):
+            expected_intensity_values_counter = []
+            expected_intensity_errors_counter= []
+                
+            for l in range(len(x)): #This part just creates all the intensity values in an array
+                for n in range(len(y)):
+                    intensity_rate_counter = (self.two_dimensional_gaussian(x[l],y[n],self.A,self.sigma_x,self.sigma_y, mu_x, mu_y) )
+                    intensity_counter = np.random.poisson(intensity_rate_counter*time[m],1)
+                        
+                    expected_intensity_values_counter.append(np.average(intensity_counter))
+                    expected_intensity_errors_counter.append(np.std(intensity_counter)/np.sqrt(len(intensity_counter)))
+                        
+            expected_intensity_values_counter = np.reshape(np.array(expected_intensity_values_counter),(len(self.x),len(self.y)))
+            expected_intensity_errors_counter = np.reshape(np.array(expected_intensity_errors_counter),(len(self.x),len(self.y)))
+                        
+                        
+            average_counter_times.append(expected_intensity_values_counter) 
+            error_counter_times.append(expected_intensity_errors_counter) 
+                        
+                        
+        return np.array(average_counter_times)
+        
+        
+    def time_to_SNR_converter(self,mu_x,mu_y):  #This takes in mu_x and mu_y, and will tell you the input SNR value.
+        a = self.intensity_values(mu_x,mu_y)
+        
+        for i in range(len(time)):
+            SNR = np.append(np.loadtxt(str(online_algor)+'_online_experiment_'+str(number_of_runs_online)+'_runs_1_SNR'),float( np.sqrt(a[i].max())))  # This just converts the times that you specify into SNR and adds them to the SNR array.  
+            #np.savetxt(str(online_algor)+ '_online_experiment_'+str(number_of_runs_online)+'_runs_1_SNR'  , SNR )
+            print(SNR[-1])
+        
+        
+        
+    
+    def third_detector(self, incoming_data, centre_grid_value_x3,centre_grid_value_y3): #returns the sum of counts incident on it 
+        #incoming_data = online_detector(self.intensity_values())
+        
+        
+        grid_x_min = centre_grid_value_x3+int(self.x_min3)
+        grid_x_max = centre_grid_value_x3+int(self.x_max3)
+        grid_y_max = centre_grid_value_y3 + int(self.y_max3)
+        grid_y_min = centre_grid_value_y3 +int(self.y_min3)
+        grid_area = (grid_x_max-grid_x_min)*(grid_y_max-grid_y_min)
+    
+        
+        return(np.sum(incoming_data[int(self.x.max())+grid_x_min:int(self.x.max())+grid_x_max+1, int(self.y.max())+grid_y_min:int(self.y.max())+grid_y_max+1]))
+    
+    def fourth_detector(self, incoming_data, centre_grid_value_x4,centre_grid_value_y4): #returns the sum of counts incident on it 
+        #incoming_data = online_detector(self.intensity_values())
+        
+        
+        grid_x_min_4 = centre_grid_value_x4+int(self.x_min4)
+        grid_x_max_4 = centre_grid_value_x4+int(self.x_max4)
+        grid_y_max_4 = centre_grid_value_y4 + int(self.y_max4)
+        grid_y_min_4 = centre_grid_value_y4 +int(self.y_min4)
+        #grid_area_4 = (grid_x_max_4-grid_x_min)*(grid_y_max-grid_y_min)
+    
+        
+        return(np.sum(incoming_data[int(self.x.max())+grid_x_min_4:int(self.x.max())+grid_x_max_4+1, int(self.y.max())+grid_y_min_4:int(self.y.max())+grid_y_max_4+1]))
+    
+    
+    
+    
+    def centre_translator_1(self, alpha, beta): # This is the first beam guider - it changes the values of mu_x and mu_y, thus, moving the distribution
+        
+        
+        self.mu_x_after_first += self.mu_x +  100*alpha #(np.sin((alpha/4)+np.pi/4)**2)   #updating this to pass onto the next guider.
+        self.mu_y_after_first += self.mu_y + 100*beta #(np.cos((beta/4)+np.pi/4)**2)    
+        mu_x_after_first = self.mu_x +  100*alpha #(np.sin((alpha/4)+np.pi/4)**2)
+        mu_y_after_first = self.mu_y + 100*beta #(np.cos((beta/4)+np.pi/4)**2)
+        return self.intensity_values(mu_x_after_first,mu_y_after_first )
+        
+    def centre_translator_2(self, gamma, delta): # This is the second beam guider
+        
+        self.mu_x_after_second+= self.mu_x_after_first - 100*gamma  #(np.sin((gamma/4)+np.pi/4)**2)   #100*(np.sin(alpha/8)) #+ np.cos(alpha/3)) # the new values of the centre: it will recreate the same plot, but with the centre values in a different place
+        self.mu_y_after_second += self.mu_y_after_first - 100* delta #(np.cos((delta/4)+np.pi/4)**2)
+        mu_x_after_second = self.mu_x_after_first -  100*gamma #(np.sin((gamma/4)+np.pi/4)**2)
+        mu_y_after_second = self.mu_y_after_first -  100*delta #(np.cos((delta/4)+np.pi/4)**2)
+        
+        
+        
+        return self.intensity_values(mu_x_after_second, mu_y_after_second )
+        
+        
+        
+        
+        
+    def surface_plotter(self,mu_x, mu_y,centre_grid_value_x3 ,centre_grid_value_y3):
+         
+        
+            
+        
+        
+        grid_x_min3 = centre_grid_value_x3+self.x_min3
+        grid_x_max3 = centre_grid_value_x3+self.x_max3
+        grid_y_min3 = centre_grid_value_y3 +self.y_min3
+        grid_y_max3 = centre_grid_value_y3 +self.y_max3
+            
+        y_plot, x_plot = np.meshgrid(self.x,self.y) # have to change the order of the meshgrid in order for the axes to correspond
+        averages_for_times = self.intensity_values(mu_x, mu_y)
+        
+        for k in range(len(averages_for_times)):
+            plt.figure(figsize=(8,4))
+    
+            ax = plt.axes(projection='3d')
+    
+            plot = ax.plot_surface(x_plot, y_plot,  averages_for_times[k], rstride=1, cstride=1,
+                                   cmap='Blues', edgecolor='none', label= 'Collected Data for'+ ' ' + str(time[k])+' ' + "Seconds")
+    
+    
+            ax.set_xlabel('x', fontsize = 15)
+            ax.set_ylabel('y', fontsize=15)
+            ax.set_zlabel('I',labelpad=0.1, fontsize=15);
+        
+            #plt.savefig('Desktop/MACHINE LEARNING IN LASER PHYSICS EXPERIMENTS/TERM 2 weekly reports/week 5/presentation_varying_SNR_plot_'+str(time[k])+'.png',dpi=1200)
+            plt.show()
+        
+        
+            figure_contour = plt.figure(figsize=(8,4))
+            #plt.grid(True)
+            contour = plt.contourf(x_plot, y_plot, averages_for_times[k], cmap='Blues')
+            plt.colorbar()
+         
+            plt.xlabel('x', labelpad=0.1, fontsize=15)
+            plt.ylabel('y', labelpad=0.1, fontsize=15)
+        
+            #plt.gca().add_patch(Rectangle((grid_x_min,grid_y_min),grid_x_max-grid_x_min,grid_y_max-grid_y_min,linewidth=1,edgecolor='r',facecolor='none'))
+            #plt.gca().add_patch(Rectangle((grid_x_min2,grid_y_min2),grid_x_max2-grid_x_min2,grid_y_max2-grid_y_min2,linewidth=1,edgecolor='r',facecolor='none'))
+            #plt.gca().add_patch(Rectangle((grid_x_min3,grid_y_min3),grid_x_max3-grid_x_min3,grid_y_max3-grid_y_min3,linewidth=1,edgecolor='black',facecolor='none'))
+            #These excess rectangles were used to plot the boundry extrema. 
+            #plt.gca().add_patch(Rectangle((-100,84),grid_x_max-grid_x_min,grid_y_max-grid_y_min,linewidth=1,edgecolor='r',facecolor='none') )
+            #plt.gca().add_patch(Rectangle((84,-100),grid_x_max-grid_x_min,grid_y_max-grid_y_min,linewidth=1,edgecolor='r',facecolor='none') )
+            #plt.gca().add_patch(Rectangle((-100,-100),grid_x_max-grid_x_min,grid_y_max-grid_y_min,linewidth=1,edgecolor='r',facecolor='none') )
+            #plt.savefig('Desktop/MACHINE LEARNING IN LASER PHYSICS EXPERIMENTS/TERM 2 weekly reports/week 5/beam_guider_first_test_input'+str(time[k])+'.png',dpi=1200)
+            plt.show()  
+                
+                
+    def component_plotter(self, post_component_data,centre_grid_value_x3,centre_grid_value_y3 ):
+        
+        grid_x_min3 = centre_grid_value_x3+self.x_min3
+        grid_x_max3 = centre_grid_value_x3+self.x_max3
+        grid_y_min3 = centre_grid_value_y3 +self.y_min3
+        grid_y_max3 = centre_grid_value_y3 +self.y_max3
+        
+        #grid_x_min4 = centre_grid_value_x4+self.x_min4
+        #grid_x_max4 = centre_grid_value_x4+self.x_max4
+        #grid_y_min4 = centre_grid_value_y4 +self.y_min4
+        #grid_y_max4 = centre_grid_value_y4 +self.y_max4
+            
+        y_plot, x_plot = np.meshgrid(self.x,self.y) # have to change the order of the meshgrid in order for the axes to correspond
+        #averages_for_times = self.intensity_values(mu_x, mu_y)
+        
+        y_plot, x_plot = np.meshgrid(self.x,self.y) # have to change the order of the meshgrid in order for the axes to correspond
+        averages_for_times = post_component_data
+            
+        for k in range(len(averages_for_times)):
+            plt.figure(figsize=(8,4))
+
+            ax = plt.axes(projection='3d')
+    
+            plot = ax.plot_surface(x_plot, y_plot,  averages_for_times[k], rstride=1, cstride=1,
+                                   cmap='Blues', edgecolor='none', label= 'Collected Data for'+ ' ' + str(time[k])+' ' + "Seconds")
+    
+    
+            ax.set_xlabel('x', fontsize = 16)
+            ax.set_ylabel('y', fontsize=16)
+            ax.set_zlabel('I',labelpad=0.1, fontsize=15);
+        
+            #plt.savefig('Desktop/MACHINE LEARNING IN LASER PHYSICS EXPERIMENTS/TERM 2 weekly reports/week 4/flowchart_static_distribution_'+str(time[k])+'.png',dpi=1200)
+            plt.show()
+        
+        
+            figure_contour = plt.figure(figsize=(8,4))
+                #plt.grid(True)
+            contour = plt.contourf(x_plot, y_plot, averages_for_times[k], cmap='Blues')
+            plt.colorbar()
+         
+            plt.xlabel('x', labelpad=0.1, fontsize=15)
+            plt.ylabel('y', labelpad=0.1, fontsize=15)
+        
+            #plt.gca().add_patch(Rectangle((grid_x_min,grid_y_min),grid_x_max-grid_x_min,grid_y_max-grid_y_min,linewidth=1,edgecolor='r',facecolor='none'))
+            #plt.gca().add_patch(Rectangle((grid_x_min2,grid_y_min2),grid_x_max2-grid_x_min2,grid_y_max2-grid_y_min2,linewidth=1,edgecolor='r',facecolor='none'))
+            plt.gca().add_patch(Rectangle((grid_x_min3,grid_y_min3),grid_x_max3-grid_x_min3,grid_y_max3-grid_y_min3,linewidth=1,edgecolor='black',facecolor='none'))
+            #plt.gca().add_patch(Rectangle((grid_x_min4,grid_y_min4),grid_x_max4-grid_x_min4,grid_y_max4-grid_y_min4,linewidth=1,edgecolor='black',facecolor='none'))
+            #These excess rectangles were used to plot the boundry extrema. 
+            #plt.gca().add_patch(Rectangle((-100,84),grid_x_max-grid_x_min,grid_y_max-grid_y_min,linewidth=1,edgecolor='r',facecolor='none') )
+            #plt.gca().add_patch(Rectangle((84,-100),grid_x_max-grid_x_min,grid_y_max-grid_y_min,linewidth=1,edgecolor='r',facecolor='none') )
+            #plt.gca().add_patch(Rectangle((-100,-100),grid_x_max-grid_x_min,grid_y_max-grid_y_min,linewidth=1,edgecolor='r',facecolor='none') )
+            #plt.savefig('Desktop/MACHINE LEARNING IN LASER PHYSICS EXPERIMENTS/TERM 2 weekly reports/week 5/beam_guider_first_test_'+str(time[k])+'.png',dpi=1200)
+            plt.show()
+                
+                
+                
+                
+
+
+
+'''Here, can test the experiment'''
+
+
+online_experiment_2 = online_experiment()
+online_experiment_2.time_to_SNR_converter(online_experiment_2.mu_x , online_experiment_2.mu_y)
+online_experiment_2.surface_plotter(online_experiment_2 .mu_x ,online_experiment_2 .mu_y, detector_x,detector_y) 
+a= online_experiment_2.intensity_values(online_experiment_2 .mu_x ,online_experiment_2 .mu_y)
+b = online_experiment_2.centre_translator_1(-1.05093457,0.66272903  ) #controls right movement and up movement
+#c = online_experiment_2.centre_translator_2(1, 1) #controls left movement and down movement
+online_experiment_2.component_plotter(b, detector_x,detector_y)
+#online_experiment_2.component_plotter(c, detector_x,detector_y)
+
+
+#print(online_experiment_2.third_detector(c[0],detector_x,detector_y))
+
+
+
+
+
+###########################################   
+
+
+##############M-LOOP#########################
+
+
+
+#Declare your custom class that inherets from the Interface class
+class CustomInterface(mli.Interface):
+    
+    #Initialization of the interface, including this method is optional
+    def __init__(self):
+        #You must include the super command to call the parent class, Interface, constructor 
+        super(CustomInterface,self).__init__()
+        self.online_indexer = 0
+        #self.experimental_data = experiment_1.intensity_values()
+        
+        #Attributes of the interface can be added here
+        #If you want to precalculate any variables etc. this is the place to do it
+        #In this example we will just define the location of the minimum
+        
+        
+    #You must include the get_next_cost_dict method in your class
+    #this method is called whenever M-LOOP wants to run an experiment
+    def get_next_cost_dict(self,params_dict):
+        
+        #Get parameters from the provided dictionary
+        params = params_dict['params']
+        
+        #Here you can include the code to run your experiment given a particular set of parameters
+        
+        # The cost will take the 'experimental data' and find the optimal detector value for this experimental data. It 
+        #... originally starts off with the data for the first specified time, and we will set a loop for the function such that it goes through all the times and saves them.
+        
+        
+        #np.random.seed(99)
+        a= online_experiment_2.intensity_values(online_experiment_2.mu_x , online_experiment_2.mu_y)
+        b = online_experiment_2.centre_translator_1(params[0],params[1])   # should return the new mux and muy
+        #c = online_experiment_2.centre_translator_2(params[2],params[3])
+        d = online_experiment_2.third_detector(b[self.online_indexer],detector_x,detector_y) 
+        
+        cost = -np.sum(d)
+        #cost = -(np.sum(c)+np.random.poisson(5, 1)) #params[0] is mu_x, whilst params[1] is mu_y  
+        
+        #this bit used to visually see moving around
+        
+        #online_experiment_2.component_plotter(c[self.online_indexer], detector_x,detector_y)
+        #There is no uncertainty in our result
+        uncer = 0
+        #The evaluation will always be a success
+        bad = False
+        timer.sleep(time[self.online_indexer]) #I imported the time module as timer #This makes m-loop wait 100seconds between each test, because this is the irradiance time. 
+        '''^^^ This timer replicates the real waiting for an experiment. that means that the time measurement we make will be the total experimental time. '''
+        
+        #The cost, uncertainty and bad boolean must all be returned as a dictionary
+        #You can include other variables you want to record as well if you want
+        cost_dict = {'cost':cost, 'uncer':uncer, 'bad':bad}
+        return cost_dict
+    
+    
+    
+def main():
+    #M-LOOP can be run with three commands, the function now is adapted to be fed with th
+    
+    
+    for i in range(len(time)):
+    
+        rounds = 1 # !!!!!!! number of repeats for each dataset!!!!!!!!!!!!!
+        intensity_collection_for_time_data_set = []
+        optimisation_times_for_time_data_set = []
+        detector_centre_x_for_time_data_set = []
+        detector_centre_y_for_time_data_set = []
+        detector_centre_fx_for_time_data_set = []
+        detector_centre_fy_for_time_data_set = []
+        
+        
+        
+        
+        
+        
+        
+        for j in range(1,rounds+1):
+            
+            
+            print('currently on round'+' '+str(j)+' ' + 'out of'+ ' '+ str(rounds)+ ' '+ 'for time data set '+  str(i+1)+' '+ 'out of'+ ' '+ str(len(time))  ) # add in the round x out of total rounds
+            #First create your interface
+            interface = CustomInterface()
+            interface.online_indexer += i
+            #Next create the controller. Provide it with your interface and any options you want to set
+            controller = mlc.create_controller(interface, 
+                                       max_num_runs = number_of_runs_online ,                    #number of planned runs
+                                       target_cost = -(1*10**7),
+                                       controller_type = M_LOOP_algorithm_for_use,         #name of controller to use
+                                        num_params = 2,                         #number of paramete
+                                        min_boundary =[-2,-2],#-np.pi,-np.pi,-np.pi,-np.pi],  #can test anywhere in the region of space             # For boundaries, the detector can only move within the limits of x and y such that it entirely remains on the x and y grid
+                                        max_boundary =[2,2],#np.pi,np.pi,np.pi,np.pi],                                           
+                                        trust_region =0.4 ) 
+        
+        
+        ###### Optimisation and time ########
+        #To run M-LOOP and find the optimal parameters just use the controller method optimize
+        #This is where we should be measuring the time and optimise. Note that the optimisation time is now the total experiment time. 
+            
+            t1_start = timer.process_time()  
+            controller.optimize()
+            t1_stop = timer.process_time()
+            time_taken = t1_stop - t1_start
+            print('time taken was:', time_taken)
+            optimisation_times_for_time_data_set.append(time_taken)
+            
+            
+        ##### PARAMETERS ####
+        #The results of the optimization will be saved to files and can also be accessed as attributes of the controller.
+            print('Best centre of detector values x and y found:')
+            print(controller.best_params)
+            detector_centre_x_for_time_data_set.append((controller.best_params[0]))  
+            detector_centre_y_for_time_data_set.append((controller.best_params[1]))
+            #detector_centre_fx_for_time_data_set.append((controller.best_params[2])) 
+            #detector_centre_fy_for_time_data_set.append((controller.best_params[3]))
+            
+            #### Cost#####
+            print('best intensity')
+            print(-1*controller.best_cost)
+            intensity_collection_for_time_data_set.append( (-1*controller.best_cost))
+            
+        
+        
+        ### turning lists into arrays for calculation safety!!####
+        
+        intensity_collection_for_time_data_set = np.array(intensity_collection_for_time_data_set)
+        optimisation_times_for_time_data_set = np.array(optimisation_times_for_time_data_set)
+        detector_centre_x_for_time_data_set = np.array(detector_centre_x_for_time_data_set)
+        detector_centre_y_for_time_data_set = np.array(detector_centre_y_for_time_data_set)
+        #detector_centre_fx_for_time_data_set = np.array(detector_centre_fx_for_time_data_set)
+        #detector_centre_fy_for_time_data_set = np.array(detector_centre_fy_for_time_data_set)
+        
+        
+        
+        
+        print('the average intensity for time data set'+ ' '+ str(i+1) + ' '+ 'was:', np.average(intensity_collection_for_time_data_set))
+        print('the error in intensity for time data set'+ ' '+ str(i+1) + ' '+ 'was:', np.std(intensity_collection_for_time_data_set)/np.sqrt(len(intensity_collection_for_time_data_set))   )
+        
+        
+        ########SAVINGGG ############
+        #saved_intensity = np.append(np.loadtxt(str(online_algor)+'_online_experiment_'+str(number_of_runs_online)+'_runs_1_intensity'), np.average(intensity_collection_for_time_data_set))  #multiply intensity by -1 as we were maximising. 
+        #np.savetxt(str(online_algor)+ '_online_experiment_'+str(number_of_runs_online)+'_runs_1_intensity'  , saved_intensity )
+        
+        #saved_intensity_error = np.append(np.loadtxt(str(online_algor)+'_online_experiment_'+str(number_of_runs_online)+'_runs_1_intensity_error' ), np.std(intensity_collection_for_time_data_set)/np.sqrt(len(intensity_collection_for_time_data_set)))   #multiply intensity by -1 as we were maximising. 
+        #np.savetxt(str(online_algor)+'_online_experiment_'+str(number_of_runs_online)+'_runs_1_intensity_error' , saved_intensity_error )
+        
+        #saved_optimisation_time = np.append(np.loadtxt(str(online_algor)+'_online_experiment_'+str(number_of_runs_online)+'_runs_1_optimisation_time' ), np.average(optimisation_times_for_time_data_set))  #multiply intensity by -1 as we were maximising. 
+        #np.savetxt( str(online_algor)+'_online_experiment_'+str(number_of_runs_online)+'_runs_1_optimisation_time' , saved_optimisation_time )
+        
+        #saved_optimisation_time_error = np.append(np.loadtxt(str(online_algor)+'_online_experiment_'+str(number_of_runs_online)+'_runs_1_optimisation_time_error'), np.std(optimisation_times_for_time_data_set)/np.sqrt(len(optimisation_times_for_time_data_set)))   #multiply intensity by -1 as we were maximising. 
+        #np.savetxt(str(online_algor)+'_online_experiment_'+str(number_of_runs_online)+'_runs_1_optimisation_time_error' , saved_optimisation_time_error )
+        
+        #saved_detector_x = np.append(np.loadtxt(str(online_algor)+'_online_experiment_'+str(number_of_runs_online)+'_runs_1_detector_x'),np.average(detector_centre_x_for_time_data_set) )
+        #np.savetxt(str(online_algor)+'_online_experiment_'+str(number_of_runs_online)+'_runs_1_detector_x',saved_detector_x  )
+        
+        #saved_detector_x_error = np.append(np.loadtxt(str(online_algor)+'_online_experiment_'+str(number_of_runs_online)+'_runs_1_detector_x_error'),np.std(detector_centre_x_for_time_data_set)/np.sqrt(len(detector_centre_x_for_time_data_set)) )
+        #np.savetxt(str(online_algor)+'_online_experiment_'+str(number_of_runs_online)+'_runs_1_detector_x_error',saved_detector_x_error )
+        
+        #saved_detector_y = np.append(np.loadtxt(str(online_algor)+'_online_experiment_'+str(number_of_runs_online)+'_runs_1_detector_y'),np.average(detector_centre_y_for_time_data_set) )
+        #np.savetxt(str(online_algor)+'_online_experiment_'+str(number_of_runs_online)+'_runs_1_detector_y',saved_detector_y  )
+        
+        #saved_detector_y_error = np.append(np.loadtxt(str(online_algor)+'_online_experiment_'+str(number_of_runs_online)+'_runs_1_detector_y_error'),np.std(detector_centre_y_for_time_data_set)/np.sqrt(len(detector_centre_y_for_time_data_set)) )
+        #np.savetxt(str(online_algor)+'_online_experiment_'+str(number_of_runs_online)+'_runs_1_detector_y_error',saved_detector_y_error )
+        
+        #saved_detector_fx = np.append(np.loadtxt(str(online_algor)+'_online_experiment_'+str(number_of_runs_online)+'_runs_1_detector_fx'),np.average(detector_centre_x_for_time_data_set) )
+        #np.savetxt(str(online_algor)+'_online_experiment_'+str(number_of_runs_online)+'_runs_1_detector_fx',saved_detector_fx  )
+        
+        #saved_detector_fx_error = np.append(np.loadtxt(str(online_algor)+'_online_experiment_'+str(number_of_runs_online)+'_runs_1_detector_fx_error'),np.std(detector_centre_fx_for_time_data_set)/np.sqrt(len(detector_centre_fx_for_time_data_set)) )
+        #np.savetxt(str(online_algor)+'_online_experiment_'+str(number_of_runs_online)+'_runs_1_detector_fx_error',saved_detector_fx_error )
+        
+        #saved_detector_fy = np.append(np.loadtxt(str(online_algor)+'_online_experiment_'+str(number_of_runs_online)+'_runs_1_detector_fy'),np.average(detector_centre_fy_for_time_data_set) )
+        #np.savetxt(str(online_algor)+'_online_experiment_'+str(number_of_runs_online)+'_runs_1_detector_fy',saved_detector_fy  )
+        
+        #saved_detector_fy_error = np.append(np.loadtxt(str(online_algor)+'_online_experiment_'+str(number_of_runs_online)+'_runs_1_detector_fy_error'),np.std(detector_centre_fy_for_time_data_set)/np.sqrt(len(detector_centre_fy_for_time_data_set)) )
+        #np.savetxt(str(online_algor)+'_online_experiment_'+str(number_of_runs_online)+'_runs_1_detector_fy_error',saved_detector_fy_error )
+        
+        
+        
+        #mlv.show_all_default_visualizations(controller)
+      
+    
+        
+if __name__ == '__main__':  
+    main() 
