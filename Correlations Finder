@@ -8,8 +8,7 @@ Created on Wed Dec  2 14:04:52 2020
 
 '''WEEK 9'''
 
-''' This contains the code needed to find the correlations. We start by creating the hessian matrix, and work through to obtain 
-correlation values'''
+''' Demonstration of how correlations between parameters were investigated for a given experiment. This involved creation of a Hesisan matrix.'''
 
 
 
