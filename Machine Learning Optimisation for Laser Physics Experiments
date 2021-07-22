@@ -1,27 +1,49 @@
-''' Simulated Walking the Beam Experiment'''
-
-
 #Imports for M-LOOP
-import mloop.interfaces as mli import mloop.controllers as mlc import mloop.visualizations as mlv import matplotlib.pyplot as plt #Other imports
+import mloop.interfaces as mli
+import mloop.controllers as mlc
+import mloop.visualizations as mlv
+import matplotlib.pyplot as plt
+#Other imports
 import numpy as np
 import random
 import pandas as pd
-import time as timer # this is done as we have a variable called time from mpl_toolkits import mplot3d
+import time as timer # this is done as we have a variable called time
+from mpl_toolkits import mplot3d
 from matplotlib import cm
-from mpl_toolkits.mplot3d import Axes3D import matplotlib.patches as patches from matplotlib.patches import Rectangle import mloop.learners as learner
-from sklearn import preprocessing
+from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.patches as patches
+from matplotlib.patches import Rectangle
+import mloop.learners as learner
 
-boundary_size = 1 # multiple of original boundary size four_params_number_of_runs_online =250 #number of runs
+from sklearn import preprocessing
+scaler = preprocessing.MinMaxScaler()
+
+
+
+
+
+boundary_size = 1 # multiple of original boundary size
+
+
+four_params_number_of_runs_online =250 #number of runs
 signal = 100 #signal size
 training = [125] #training run number
-four_params_algorithm_for_use = ’gaussian_process’ #algorithm to use alg = ’nm’
-background_noise = 10 # background noise success_test = 0
+four_params_algorithm_for_use = 'gaussian_process' #algorithm to use
+alg = 'nm'
+background_noise = 10 # background noise
 
+success_test = 0
 
-k_1 = np.array([30,-30, 0]) #original k vector #Components
-mirror_1_centre = np.array([-60,60, 30]) mirror_2_centre = np.array([35,130, 30])
+''' Final 4 parameter Mirror Experiment'''
 
-filter_centre = np.array([35, 30, 30]) 
+import numpy as np
+
+k_1 = np.array([30,-30, 0]) #original k vector
+
+#Components
+mirror_1_centre = np.array([-60,60, 30])
+mirror_2_centre = np.array([35,130, 30])
+filter_centre = np.array([35, 30, 30])
 detector_centre = np.array([35, 0, 30])
 
 mirror_1 =  np.matrix([[ 1, 0, 0 ],
@@ -33,25 +55,33 @@ mirror_2 = np.matrix([[ 1, 0, 0 ],
                    [ 0, -1 , 0 ],
                    [ 0 , 0   , 1 ]])
 
-#experiment class
+
+
+#Experiment class
+
 class four_params_experiment:
     
     
     def __init__(self):
-        self.follow_up_x_to_mirror_1 = 0 # for the coorinates after hitting mirror 1
+        
+         # for the coorinates after hitting mirror 1
+        self.follow_up_x_to_mirror_1 = 0
         self.follow_up_y_to_mirror_1 = 0
         self.follow_up_z_to_mirror_1 = 0
         self.signal = 100
         
-        self.follow_up_x_to_mirror_2 = 0 # for the coordinates after hitting mirror 2
+        # for the coordinates after hitting mirror 2
+        self.follow_up_x_to_mirror_2 = 0 
         self.follow_up_y_to_mirror_2 = 0
         self.follow_up_z_to_mirror_2 = 0
         
-        self.follow_up_x_to_filter = 0 # for the coordinates after hitting filter
+         # for the coordinates after hitting filter
+        self.follow_up_x_to_filter = 0
         self.follow_up_y_to_filter = 0
         self.follow_up_z_to_filter  = 0
         
-        self.follow_up_x_to_detector =0 # coordinates when level with the detector in y. 
+        # coordinates when level with the detector in y. 
+        self.follow_up_x_to_detector =0 
         self.follow_up_y_to_detector  =0
         self.follow_up_z_to_detector = 0
         
@@ -60,12 +90,15 @@ class four_params_experiment:
         self.success = 0
         self.seeder = 2
     
-    def Rz(self,a):  #this is a rotation around the z axis
+    
+    #this is a rotation around the vert. axis
+    def Rz(self,a):  
         return np.matrix([[ np.cos(a), -np.sin(a), 0 ],
                    [ np.sin(a), np.cos(a) , 0 ],
                    [ 0           , 0            , 1 ]])
     
-    def R_mirror_x_axis(self, a, b): # rotation around the x axis
+    # rotation around the horiz. axis
+    def R_mirror_x_axis(self, a, b):
         u_x = np.cos(a)
         u_y = np.sin(a)
         u_z = 0
@@ -75,22 +108,30 @@ class four_params_experiment:
         return np.matrix([[ t*u_x**2 + np.cos(b),    t*u_x*u_y - np.sin(b)*u_z           ,    t*u_x*u_z +np.sin(b)*u_y           ],
                    [ t*u_x*u_y + np.sin(b)*u_z ,   t*u_y**2 + np.cos(b),             t*u_y*u_z - np.sin(b)*u_x   ],
                    [ t*u_x*u_z  - np.sin(b)*u_y   ,    t*u_y*u_z + np.sin(b)*u_x  ,    t*u_z**2 + np.cos(b)]])
-                   
-                   
-    def mirror_action(self, mirror, rotation_in_z, rotatation_in_x): # this function finds the new mirror matrix after it is transformed through angles 1 and 2. You need to do M x k to find the new k vector. 
-        #def post_mirror_rotation(rotation_in_z, rotatation_in_x): # We will apply the rotation about the z-axis, and then a rotation about the x-axis.
-        post_z_part_1 = np.matmul(mirror, np.transpose(self.Rz(rotation_in_z)))
-        mirror_rotated_in_z = np.matmul(self.Rz(rotation_in_z),post_z_part_1) # This defines rotation around the z axis. Now we apply rotation about the x axis. 
     
-    #now apply a rotation in the x axis around this
+    
+    
+    
+    
+    # this function finds the new mirror matrix after it is
+    #transformed through angles 1 and 2. You need to do M x k to
+    #find the new k vector.
+    def mirror_action(self, mirror, rotation_in_z, rotatation_in_x):  
+        
+        post_z_part_1 = np.matmul(mirror, np.transpose(self.Rz(rotation_in_z)))
+        mirror_rotated_in_z = np.matmul(self.Rz(rotation_in_z),post_z_part_1) 
+    
+    
         post_x_part_1 = np.matmul(mirror_rotated_in_z, np.transpose(self.R_mirror_x_axis(rotation_in_z,rotatation_in_x)) )
         mirror_after_rotation_in_z_and_x = np.matmul(self.R_mirror_x_axis(rotation_in_z, rotatation_in_x),post_x_part_1)
     
     
         return mirror_after_rotation_in_z_and_x
     
-    def vector_line_equation(self,mirror_centre, point, k_vector): #This function is for seeing if the k is incident on a mirror mirror .
-        coeff_lambda = ((mirror_centre)[1] - (point[1]))/k_vector[0,1] # you input the centre value of the mirror, the starting point of the k vector, and then find kx,ky and kz after reflection. 
+    
+     #This function is for seeing if the k is incident on a mirror mirror .
+    def vector_line_equation(self,mirror_centre, point, k_vector):
+        coeff_lambda = ((mirror_centre)[1] - (point[1]))/k_vector[0,1] 
         x = point[0] +coeff_lambda*k_vector[0,0]
         y = point[1] +coeff_lambda*k_vector[0,1]
         z = point[2] +coeff_lambda*k_vector[0,2]
@@ -100,7 +141,9 @@ class four_params_experiment:
         self.follow_up_z_to_mirror_1 = z 
         
     
-        if 25<x<45 and 20<z<40:  # This is returning the answer if we manage hit the second detector. 
+        if 25<x<45 and 20<z<40:  
+            # This is returning the answer if 
+            #we manage hit the second detector. 
             print('hit mirror 2!!!')
             print('point at which we hit mirror 2:', np.array([x,y,z]))
             #self.cost = 20
@@ -108,74 +151,55 @@ class four_params_experiment:
         else:
             print('didnt hit mirror 2')
             return 0
+
         
-    def vector_filter(self,filter_centre, point, k_vector): #This function is for seeing if the output k_3 passes through the filter
+    def detector(self,filter_centre, detector_centre, point, k_vector): 
+  #This function is for seeing if the output k_3 is incident on the detector
         
-        if 25<self.follow_up_x_to_mirror_1<45 and 20<self.follow_up_z_to_mirror_1<40:# the coordinates on mirror 2
+        # the coordinates on mirror 2 ie - it needs to hit mirror 2 first
+        if 25<self.follow_up_x_to_mirror_1<45 and 20<self.follow_up_z_to_mirror_1<40:
             coeff_lambda = ((filter_centre)[1] - (point[1]))/k_vector[1,0]
             x_f = point[0] +coeff_lambda*k_vector[0,0]
             y_f = point[1] +coeff_lambda*k_vector[1,0]
             z_f = point[2] +coeff_lambda*k_vector[2,0]
             
-            self.follow_up_x_to_filter = x_f
-            self.follow_up_y_to_filter  = y_f
-            self.follow_up_z_to_filter = z_f
-            print('working')
-            print('beam is currently at:',np.array([x_f,y_f,z_f]))
             
-            if 10<x_f<70 and 0<z_f<30.002: 
-                print('hit filter!!')
-                print(np.array([x_f,y_f,z_f]))
-                return np.array([x_f,y_f,z_f])
-            
-            else:
-                print('didnt hit filter!!!')
-                print(x)
-                return 0 
-        
-        else:
-            'Didnt hit mirror 2'
-            return 0
-        
-    def detector(self,filter_centre, detector_centre, point, k_vector): #This function is for seeing if the output k_2 is incident on the detector
-        
-        if 25<self.follow_up_x_to_mirror_1<45 and 20<self.follow_up_z_to_mirror_1<40:# the coordinates on mirror 2 ie - it needs to hit mirror 2 first
-            coeff_lambda = ((filter_centre)[1] - (point[1]))/k_vector[1,0]
-            x_f = point[0] +coeff_lambda*k_vector[0,0]
-            y_f = point[1] +coeff_lambda*k_vector[1,0]
-            z_f = point[2] +coeff_lambda*k_vector[2,0]
-            
-            self.follow_up_x_to_filter = x_f # These are the coordinates when at the same y distance as the filter. If x and z fall within the specifieid boundaries, then we have succeeded.
+            # These are the coordinates when at the same y distance 
+            #as the filter. If x and z fall within the specifieid boundaries, 
+            #then we have succeeded.
+            self.follow_up_x_to_filter = x_f 
             self.follow_up_y_to_filter  = y_f
             self.follow_up_z_to_filter = z_f
             
-            #print('beam when level with filter:',np.array([x_f,y_f,z_f]))
+            
             
             coeff_lambda_detector = ((detector_centre)[1] - (point[1]))/k_vector[1,0]
             x_d = point[0] +coeff_lambda_detector*k_vector[0,0]
             y_d = point[1] +coeff_lambda_detector*k_vector[1,0]
             z_d = point[2] +coeff_lambda_detector*k_vector[2,0]
             
-            self.follow_up_x_to_detector = x_d # coordinates when level with the detector in y. 
+            self.follow_up_x_to_detector = x_d  
             self.follow_up_y_to_detector  = y_d
             self.follow_up_z_to_detector = z_d
             
-            #print('beam when level with detecotor:',np.array([x_d,y_d,z_d]))
+           
             
             
+            #Needs to pass through the filter first
             
-            
-            if 10<x_f<70 and 0<z_f<30.0001:  #Needs to pass through the filter first
+            if 10<x_f<70 and 0<z_f<30.0001:  
                 print('passed through filter!!')
                 print('passed thorough the filter at point:', np.array([x_f,y_f,z_f]))
-                #self.cost =40
-                if -10<x_d<40 and 0<z_d<30.0001:#0<z_d<30.002: # These are the boundaries of the detector
+                
+                #now detector
+            
+                if -10<x_d<40 and 0<z_d<30.0001:
                 
                     print('\n','We hit the detector!!!! The point at which we hit was:', np.array([x_d,y_d,z_d]))
                     
                     
                     self.success = 1 #global success
-                    return  self.signal #signal #np.array([x_d,y_d,z_d]) #If we hit the detector, you get a cost returned. 
+                    return  self.signal  
                 else:
                     print('We passed through filter, but didnt hit detector, the point when level with detector is:',np.array([x_d,y_d,z_d]) )
                     return 0
@@ -194,7 +218,11 @@ class four_params_experiment:
 
 
 
+#Call the experiment class
+
 experiment_final = four_params_experiment()
+
+
 
 
 
@@ -227,6 +255,8 @@ class CustomInterface(mli.Interface):
         #... originally starts off with the data for the first specified time, and we will set a loop for the function such that it goes through all the times and saves them.
         
         
+        #run experiment here with M-LOOP parameters inputted
+        
         mirror_array_after_mirror_1 = experiment_final.mirror_action(mirror_1,params[0] ,params[1])
         k_2 = np.matmul(mirror_array_after_mirror_1,k_1) 
         
@@ -236,25 +266,18 @@ class CustomInterface(mli.Interface):
         at_mirror_2 = experiment_final.vector_line_equation(mirror_2_centre,mirror_1_centre, k_2)
         
         
-        #np.random.seed(experiment_final.seeder)
-        cost = -experiment_final.detector(filter_centre,detector_centre,at_mirror_2, k_3 )     #-(np.random.poisson(experiment_final.detector(filter_centre,detector_centre,at_mirror_2, k_3 )+background_noise))
+        #Cost function
+        cost = -(np.random.poisson(experiment_final.detector(filter_centre,detector_centre,at_mirror_2, k_3 )+background_noise))
         
         '''Tells us if a run hit the detector or not and saves it'''
         if 10<experiment_final.follow_up_x_to_filter<70 and 0<experiment_final.follow_up_z_to_filter<30.0001:
             if -10<experiment_final.follow_up_x_to_detector<40 and 0<experiment_final.follow_up_z_to_detector<30.0001:
                 print('success')
             
-                #experiment_final.success +=1
             
-                #a = np.loadtxt('successor1_round='+str(self.indexer)+'noise='+str(background_noise)+'boundary='+str(boundary_size))
-                #a = np.append(a, 1)
-                #np.savetxt('successor1_round='+str(self.indexer)+'noise='+str(background_noise)+'boundary='+str(boundary_size), a)
             else:
                 print('fail')
-                #a = np.loadtxt('successor1_round='+str(self.indexer)+'noise='+str(background_noise)+'boundary='+str(boundary_size))
-                #a = np.append(a, 0)
-                #np.savetxt('successor1_round='+str(self.indexer)+'noise='+str(background_noise)+'boundary='+str(boundary_size), a)
-                    
+               
         
         
         
@@ -262,14 +285,17 @@ class CustomInterface(mli.Interface):
         uncer = 0
         #The evaluation will always be a success
         bad = False
-        #timer.sleep(time[self.online_indexer]) #I imported the time module as timer #This makes m-loop wait 100seconds between each test, because this is the irradiance time. 
-        '''^^^ This timer replicates the real waiting for an experiment. that means that the time measurement we make will be the total experimental time. '''
+        #timer.sleep(time[self.online_indexer]) 
+        #^^^ This timer replicates the real waiting for an experiment.
         no_delay = False
         #The cost, uncertainty and bad boolean must all be returned as a dictionary
         #You can include other variables you want to record as well if you want
         cost_dict = {'cost':cost, 'uncer':uncer, 'bad':bad}
         return cost_dict
     
+
+
+#The optimisation occurs from this function
 def main():
     #M-LOOP can be run with three commands, the function now is adapted to be fed with th
     successor=  []
@@ -281,41 +307,87 @@ def main():
         
             
             
-        print('currently on round'+' '+str(j)+' ' + 'out of'+ ' '+ str(rounds)+ ' '+ 'for noise=0')   # add in the round x out of total rounds
+        print('currently on round'+' '+str(j)+' ' + 'out of'+ ' '+ str(rounds)+ ' '+ 'for noise=0')   
         #First create your interface
         interface = CustomInterface()
         interface.indexer += j
         #Next create the controller. Provide it with your interface and any options you want to set
-        gp_learner = learner.GaussianProcessLearner(length_scale= None )#length_scale = None, update_hyperparameters = True
+        gp_learner = learner.GaussianProcessLearner(length_scale= None )
         
         controller = mlc.create_controller(interface,training_type = 'differential_evolution', controller_type = four_params_algorithm_for_use, 
-                                           num_training_runs = training[0], no_delay = False, 
-                                       max_num_runs = four_params_number_of_runs_online ,                    #number of planned runs
-                                       target_cost = -(1*10**7),
-                                                #name of controller to use
-                                        num_params = 4,                         #number of paramete
-                                        min_boundary =  [boundary_size*-0.1,  boundary_size*-0.02,   boundary_size*-1, boundary_size*  -0.02],#-np.pi,-np.pi,-np.pi,-np.pi],  #can test anywhere in the region of space             # For boundaries, the detector can only move within the limits of x and y such that it entirely remains on the x and y grid
-                                        max_boundary =  [boundary_size*0,      boundary_size*0.02,  boundary_size*0,  boundary_size*0.02],#np.pi,np.pi,np.pi,np.pi],                                           
-                                        trust_region =0.4, length_scale = None )
-                                        #training_type = 'nelder_mead')
+           num_training_runs = training[0], no_delay = False, 
+          max_num_runs = four_params_number_of_runs_online ,                 
+        target_cost = -(1*10**7),
+                                               
+         num_params = 4,                        
+        min_boundary =  [boundary_size*-0.1,  boundary_size*-0.02,   
+                         boundary_size*-1, boundary_size*  -0.02],
+       max_boundary =  [boundary_size*0,      boundary_size*0.02, 
+                        boundary_size*0,  boundary_size*0.02],                                          
+      trust_region =0.4, length_scale = None )
+                                        
         gp_learner = learner.GaussianProcessLearner( )  
         
-        '''Time stuff'''    
+        '''Timing'''    
         
-        #t1_start = timer.process_time()  
-        controller.optimize()
-    
-        '''cost stuff'''
+        t1_start = timer.process_time()  
+        controller.optimize() # Optimisation function
+        t1_stop = timer.process_time()
+        time_taken = t1_stop - t1_start
+        
+        
+        print(gp_learner.all_params  )
+      
+       
+        
+        
+        #params stuff
+        print('Best centre of detector values x and y found:')
+        
+        post_mirror_array_after_mirror_1 = experiment_final.mirror_action(
+            mirror_1,controller.best_params[0],controller.best_params[1])
+        post_k_2 = np.matmul(post_mirror_array_after_mirror_1,k_1) 
+        #print(k_2)
+        post_mirror_array_after_mirror_2 = ( 
+        experiment_final.mirror_action(
+            mirror_2, controller.best_params[2], controller.best_params[3] ))
+        
+        post_k_3 = np.matmul(
+            post_mirror_array_after_mirror_2,np.transpose(post_k_2))
+
+        post_at_mirror_2 = experiment_final.vector_line_equation(
+            mirror_2_centre,mirror_1_centre, post_k_2)
+
+        post_final =  experiment_final.detector(
+            filter_centre,detector_centre,post_at_mirror_2 , post_k_3 )
+        if post_final ==100:
+            
+            print('the optimisation was a success')
+        else:
+            
+            print('the optimisation was a failure')
+        
+        
+        
+        
+  
+        
+        '''cost return'''
         print('best intensity')
         print(-1*controller.best_cost)
+                                
+        #print(controller.out_params)     
+    
+        #mlv.show_all_default_visualizations(controller)
+
+
         
         
         
         
-        
-        
+
         
 if __name__ == '__main__':  
     main()
-                       
+   
     
